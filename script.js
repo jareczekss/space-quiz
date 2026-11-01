@@ -72,12 +72,22 @@
       }
     ];
 
+    const categoryScreen = document.querySelector("#category-screen");
+    const categoryTitle = document.querySelector("#category-title");
+    const categoryOptions = document.querySelector("#category-options");
+    const categoryFeedback = document.querySelector("#category-feedback");
+    const selectAllCategoriesButton = document.querySelector("#select-all-categories");
+    const clearCategoriesButton = document.querySelector("#clear-categories");
+    const startButton = document.querySelector("#start-button");
     const questionElement = document.querySelector("#question");
     const questionCountElement = document.querySelector("#question-count");
     const questionKickerElement = document.querySelector("#question-kicker");
     const answersElement = document.querySelector("#answers");
     const feedbackElement = document.querySelector("#feedback");
     const scoreElement = document.querySelector("#score");
+    const totalCountElement = document.querySelector("#total-count");
+    const bestScoreElement = document.querySelector("#best-score");
+    const progressWrap = document.querySelector("#progress-wrap");
     const progressTrack = document.querySelector("#progress-track");
     const progressFill = document.querySelector("#progress-fill");
     const progressLabel = document.querySelector("#progress-label");
@@ -90,24 +100,144 @@
     const resultMessageElement = document.querySelector("#result-message");
     const reviewButton = document.querySelector("#review-button");
     const restartButton = document.querySelector("#restart-button");
+    const changeCategoriesButton = document.querySelector("#change-categories-button");
     const backToResultsButton = document.querySelector("#back-to-results-button");
+    const reviewChangeCategoriesButton = document.querySelector("#review-change-categories-button");
     const reviewRestartButton = document.querySelector("#review-restart-button");
 
+    const bestScoreStorageKey = "orbit-academy-best-score";
+    const categoryNames = [...new Set(questions.map((question) => question.category))];
+    let activeQuestions = [];
+    let selectedCategoryNames = [...categoryNames];
     let questionIndex = 0;
     let score = 0;
-    let selectedAnswers = Array(questions.length).fill(null);
+    let selectedAnswers = [];
+    let bestScore = null;
+
+    function renderBestScore() {
+      bestScoreElement.textContent = bestScore
+        ? `Best: ${bestScore.score} / ${bestScore.total}`
+        : "Best: not set";
+    }
+
+    function loadBestScore() {
+      try {
+        const savedBestScore = window.localStorage.getItem(bestScoreStorageKey);
+        if (savedBestScore === null) {
+          renderBestScore();
+          return;
+        }
+
+        const parsedBestScore = JSON.parse(savedBestScore);
+        if (
+          !parsedBestScore ||
+          !Number.isInteger(parsedBestScore.score) ||
+          !Number.isInteger(parsedBestScore.total) ||
+          parsedBestScore.total < 1 ||
+          parsedBestScore.score < 0 ||
+          parsedBestScore.score > parsedBestScore.total
+        ) {
+          throw new Error("Saved best score has an invalid format.");
+        }
+
+        bestScore = parsedBestScore;
+        renderBestScore();
+      } catch (error) {
+        bestScoreElement.textContent = "Best score unavailable";
+        console.error("Could not load the saved best score.", error);
+      }
+    }
+
+    function saveBestScore() {
+      if (bestScore && score * bestScore.total <= bestScore.score * activeQuestions.length) {
+        renderBestScore();
+        return;
+      }
+
+      const newBestScore = { score, total: activeQuestions.length };
+      try {
+        window.localStorage.setItem(bestScoreStorageKey, JSON.stringify(newBestScore));
+        bestScore = newBestScore;
+        renderBestScore();
+      } catch (error) {
+        bestScoreElement.textContent = "Best score could not be saved";
+        console.error("Could not save the best score.", error);
+      }
+    }
+
+    function updateCategorySelection() {
+      const selectedInputs = categoryOptions.querySelectorAll("input");
+      selectedCategoryNames = selectedInputs
+        .filter((input) => input.checked)
+        .map((input) => input.value);
+      startButton.disabled = selectedCategoryNames.length === 0;
+      categoryFeedback.textContent = selectedCategoryNames.length === 0
+        ? "Choose at least one category to start."
+        : `${selectedCategoryNames.length} ${selectedCategoryNames.length === 1 ? "category" : "categories"} selected.`;
+    }
+
+    function renderCategoryOptions() {
+      categoryOptions.replaceChildren();
+
+      categoryNames.forEach((category) => {
+        const label = document.createElement("label");
+        label.className = "category-option is-selected";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "category-checkbox";
+        checkbox.name = "category";
+        checkbox.value = category;
+        checkbox.checked = true;
+        checkbox.addEventListener("change", () => {
+          label.classList.toggle("is-selected", checkbox.checked);
+          updateCategorySelection();
+        });
+
+        const text = document.createElement("span");
+        text.textContent = category;
+        label.append(checkbox, text);
+        categoryOptions.append(label);
+      });
+
+      updateCategorySelection();
+    }
+
+    function shuffle(items) {
+      const shuffled = [...items];
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+      }
+      return shuffled;
+    }
+
+    function createQuizQuestions(categories) {
+      const selectedQuestions = questions.filter((question) => categories.includes(question.category));
+      return shuffle(selectedQuestions).map((question) => {
+        const answerOrder = shuffle(question.answers.map((_, index) => index));
+        return {
+          ...question,
+          answers: answerOrder.map((index) => question.answers[index]),
+          correct: answerOrder.indexOf(question.correct)
+        };
+      });
+    }
 
     function renderQuestion() {
-      const current = questions[questionIndex];
+      const current = activeQuestions[questionIndex];
       const completed = questionIndex;
-      const percent = Math.round((completed / questions.length) * 100);
+      const total = activeQuestions.length;
+      const percent = Math.round((completed / total) * 100);
 
       questionKickerElement.textContent = current.category;
       questionElement.textContent = current.prompt;
-      questionCountElement.textContent = `Question ${questionIndex + 1} of ${questions.length}`;
+      questionCountElement.textContent = `Question ${questionIndex + 1} of ${total}`;
+      totalCountElement.textContent = String(total);
+      progressTrack.setAttribute("aria-valuemax", String(total));
       progressLabel.textContent = `${percent}% complete`;
       progressTrack.setAttribute("aria-valuenow", String(completed));
-      progressTrack.setAttribute("aria-valuetext", `${completed} of ${questions.length} questions answered`);
+      progressTrack.setAttribute("aria-valuetext", `${completed} of ${total} questions answered`);
       progressFill.style.width = `${percent}%`;
       feedbackElement.textContent = "";
       feedbackElement.className = "feedback";
@@ -138,13 +268,13 @@
     function renderReview() {
       reviewList.replaceChildren();
 
-      questions.forEach((question, index) => {
+      activeQuestions.forEach((question, index) => {
         const listItem = document.createElement("li");
         listItem.className = "review-item";
 
         const questionLabel = document.createElement("p");
         questionLabel.className = "review-question";
-        questionLabel.textContent = `Question ${index + 1}`;
+        questionLabel.textContent = `Question ${index + 1} · ${question.category}`;
 
         const prompt = document.createElement("h3");
         prompt.className = "review-prompt";
@@ -161,19 +291,22 @@
         const correctAnswer = document.createElement("p");
         correctAnswer.textContent = `Correct answer: ${question.answers[question.correct]}`;
 
+        const fact = document.createElement("p");
+        fact.textContent = question.fact;
+
         const status = document.createElement("span");
         const isCorrect = chosenIndex === question.correct;
         status.className = `review-status ${isCorrect ? "is-correct" : "is-wrong"}`;
         status.textContent = isCorrect ? "Correct" : "Incorrect";
 
-        answerRow.append(yourAnswer, correctAnswer);
+        answerRow.append(yourAnswer, correctAnswer, fact);
         listItem.append(questionLabel, prompt, status, answerRow);
         reviewList.append(listItem);
       });
     }
 
     function chooseAnswer(selectedIndex) {
-      const current = questions[questionIndex];
+      const current = activeQuestions[questionIndex];
       const answerButtons = [...answersElement.querySelectorAll("button")];
       const isCorrect = selectedIndex === current.correct;
 
@@ -195,9 +328,44 @@
         feedbackElement.classList.add("bad");
       }
 
-      nextButton.textContent = questionIndex === questions.length - 1 ? "See my results" : "Next question";
+      nextButton.textContent = questionIndex === activeQuestions.length - 1 ? "See my results" : "Next question";
       nextButton.hidden = false;
       nextButton.focus();
+    }
+
+    function showCategorySelection() {
+      quizContent.hidden = true;
+      resultsElement.hidden = true;
+      reviewScreen.hidden = true;
+      categoryScreen.hidden = false;
+      progressWrap.hidden = true;
+      updateCategorySelection();
+      categoryTitle.focus();
+    }
+
+    function startQuiz(categories = selectedCategoryNames) {
+      if (categories.length === 0) {
+        categoryFeedback.textContent = "Choose at least one category to start.";
+        startButton.disabled = true;
+        categoryTitle.focus();
+        return;
+      }
+
+      selectedCategoryNames = [...categories];
+      activeQuestions = createQuizQuestions(selectedCategoryNames);
+      selectedAnswers = Array(activeQuestions.length).fill(null);
+      questionIndex = 0;
+      score = 0;
+      scoreElement.textContent = "0";
+      totalCountElement.textContent = String(activeQuestions.length);
+      progressTrack.setAttribute("aria-valuemax", String(activeQuestions.length));
+      categoryScreen.hidden = true;
+      resultsElement.hidden = true;
+      reviewScreen.hidden = true;
+      progressWrap.hidden = false;
+      quizContent.hidden = false;
+      renderQuestion();
+      questionElement.focus();
     }
 
     function showReview() {
@@ -209,21 +377,23 @@
     }
 
     function showResults() {
-      const percentage = Math.round((score / questions.length) * 100);
+      const total = activeQuestions.length;
+      const percentage = Math.round((score / total) * 100);
       quizContent.hidden = true;
       reviewScreen.hidden = true;
-      progressTrack.setAttribute("aria-valuenow", String(questions.length));
-      progressTrack.setAttribute("aria-valuetext", `${questions.length} of ${questions.length} questions answered`);
+      progressTrack.setAttribute("aria-valuenow", String(total));
+      progressTrack.setAttribute("aria-valuetext", `${total} of ${total} questions answered`);
       progressFill.style.width = "100%";
       progressLabel.textContent = "100% complete";
       questionCountElement.textContent = "Mission complete";
-      resultScoreElement.textContent = `${score} / ${questions.length}`;
+      resultScoreElement.textContent = `${score} / ${total}`;
+      saveBestScore();
 
-      if (score === questions.length) {
+      if (score === total) {
         resultMessageElement.textContent = `Stellar work! You scored ${percentage}% and know your way around the cosmos.`;
-      } else if (score >= 7) {
+      } else if (percentage >= 70) {
         resultMessageElement.textContent = `Excellent exploring. You scored ${percentage}% and have a great handle on the cosmos.`;
-      } else if (score >= 4) {
+      } else if (percentage >= 40) {
         resultMessageElement.textContent = `Nice discoveries. You scored ${percentage}%. There's always more universe to explore.`;
       } else {
         resultMessageElement.textContent = `You scored ${percentage}%. Every great explorer starts with a first mission.`;
@@ -233,20 +403,15 @@
       restartButton.focus();
     }
 
-    function resetQuiz() {
-      questionIndex = 0;
-      score = 0;
-      selectedAnswers = Array(questions.length).fill(null);
-      scoreElement.textContent = "0";
-      resultsElement.hidden = true;
-      reviewScreen.hidden = true;
-      quizContent.hidden = false;
-      renderQuestion();
-      questionElement.focus();
+    function changeCategories() {
+      categoryOptions.querySelectorAll("input").forEach((input) => {
+        input.checked = selectedCategoryNames.includes(input.value);
+      });
+      showCategorySelection();
     }
 
     nextButton.addEventListener("click", () => {
-      if (questionIndex === questions.length - 1) {
+      if (questionIndex === activeQuestions.length - 1) {
         showResults();
         return;
       }
@@ -255,16 +420,34 @@
       questionElement.focus();
     });
 
-    reviewButton.addEventListener("click", showReview);
+    selectAllCategoriesButton.addEventListener("click", () => {
+      categoryOptions.querySelectorAll("input").forEach((input) => {
+        input.checked = true;
+        input.parentElement.classList.add("is-selected");
+      });
+      updateCategorySelection();
+    });
 
+    clearCategoriesButton.addEventListener("click", () => {
+      categoryOptions.querySelectorAll("input").forEach((input) => {
+        input.checked = false;
+        input.parentElement.classList.remove("is-selected");
+      });
+      updateCategorySelection();
+    });
+
+    startButton.addEventListener("click", () => startQuiz());
+    reviewButton.addEventListener("click", showReview);
     backToResultsButton.addEventListener("click", () => {
       reviewScreen.hidden = true;
       resultsElement.hidden = false;
       restartButton.focus();
     });
+    changeCategoriesButton.addEventListener("click", changeCategories);
+    reviewChangeCategoriesButton.addEventListener("click", changeCategories);
+    restartButton.addEventListener("click", () => startQuiz());
+    reviewRestartButton.addEventListener("click", () => startQuiz());
 
-    restartButton.addEventListener("click", resetQuiz);
-    reviewRestartButton.addEventListener("click", resetQuiz);
-
-    renderQuestion();
+    renderCategoryOptions();
+    loadBestScore();
   

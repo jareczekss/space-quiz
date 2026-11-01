@@ -20,10 +20,13 @@
     <section class="quiz-card" aria-label="Space exploration quiz">
       <div class="quiz-topline">
         <span class="mission-label">Mission 01 · Deep space</span>
-        <span class="score-chip" aria-label="Score"><span aria-hidden="true">★</span> <span id="score">0</span> / 10</span>
+        <div class="score-display">
+          <span class="score-chip" aria-label="Score"><span aria-hidden="true">★</span> <span id="score">0</span> / <span id="total-count">10</span></span>
+          <span id="best-score" class="best-score" role="status" aria-live="polite"></span>
+        </div>
       </div>
 
-      <div class="progress-wrap">
+      <div id="progress-wrap" class="progress-wrap" hidden>
         <div class="progress-meta">
           <span id="question-count">Question 1 of 10</span>
           <span id="progress-label">10% complete</span>
@@ -33,7 +36,23 @@
         </div>
       </div>
 
-      <div id="quiz-content" class="quiz-content">
+      <section id="category-screen" class="category-screen" aria-labelledby="category-title">
+        <p class="mission-label">Choose your mission</p>
+        <h1 id="category-title" tabindex="-1">Pick your space topics</h1>
+        <p class="category-description">Choose one or more categories for this quiz. You can update your selection before each mission.</p>
+        <fieldset class="category-fieldset">
+          <legend>Quiz categories</legend>
+          <div id="category-options" class="category-options"></div>
+        </fieldset>
+        <div class="category-actions">
+          <button id="select-all-categories" class="secondary-button" type="button">Select all</button>
+          <button id="clear-categories" class="secondary-button" type="button">Clear</button>
+        </div>
+        <p id="category-feedback" class="category-feedback" role="status" aria-live="polite"></p>
+        <button id="start-button" class="restart-button" type="button">Start mission <span aria-hidden="true">→</span></button>
+      </section>
+
+      <div id="quiz-content" class="quiz-content" hidden>
         <p id="question-kicker" class="question-kicker">Navigation systems</p>
         <h1 id="question" tabindex="-1"></h1>
         <div id="answers" class="answers" role="group" aria-labelledby="question"></div>
@@ -51,6 +70,7 @@
         <p id="result-message" class="result-message"></p>
         <div class="results-actions">
           <button id="review-button" class="secondary-button" type="button">Review answers</button>
+          <button id="change-categories-button" class="secondary-button" type="button">Change categories</button>
           <button id="restart-button" class="restart-button" type="button"><span aria-hidden="true">↻</span> Launch again</button>
         </div>
       </section>
@@ -63,11 +83,12 @@
         <ol id="review-list" class="review-list"></ol>
         <div class="review-actions">
           <button id="back-to-results-button" class="secondary-button" type="button">Back to results</button>
+          <button id="review-change-categories-button" class="secondary-button" type="button">Change categories</button>
           <button id="review-restart-button" class="restart-button" type="button"><span aria-hidden="true">↻</span> Launch again</button>
         </div>
       </section>
     </section>
-    <p class="footer-note">Ten questions. One very curious astronaut.</p>
+    <p class="footer-note">Choose your topics. Explore the cosmos.</p>
   </main>
 
   <script src="script.js"></script>
